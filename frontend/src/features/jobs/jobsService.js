@@ -1,46 +1,52 @@
 // frontend/src/features/jobs/jobsService.js
-const BASE = "/api/jobs"; // dev proxy -> localhost:8080
+const BASE = "/api/jobs"; // use relative path so CRA proxy forwards to backend
 
-function handleResponse(res) {
+async function handleResponse(res) {
+  const contentType = res.headers.get("content-type") || "";
+  const isJson = contentType.includes("application/json");
+  const body = isJson ? await res.json() : await res.text();
+
   if (!res.ok) {
-    return res.text().then(t => { throw new Error(t || res.statusText); });
+    // if server returned JSON errors (e.g., validation map), throw that object
+    const err = isJson ? body : { message: body || res.statusText };
+    throw err;
   }
-  // try parse json, fallback to text
-  return res.headers.get("content-type")?.includes("application/json")
-    ? res.json()
-    : res.text();
+  return body;
 }
 
-export async function listJobs({ page = 0, size = 10, q = "" } = {}) {
-  const url = `${BASE}?page=${page}&size=${size}&q=${encodeURIComponent(q)}`;
-  const res = await fetch(url, { method: "GET" });
-  return handleResponse(res);
+/** LIST with optional params: {page, size, q} */
+export function listJobs({ page = 0, size = 20, q } = {}) {
+  const params = new URLSearchParams();
+  params.set("page", page);
+  params.set("size", size);
+  if (q) params.set("q", q);
+  const url = `${BASE}?${params.toString()}`;
+  return fetch(url, { method: "GET" }).then(handleResponse);
 }
 
-export async function getJob(id) {
-  const res = await fetch(`${BASE}/${id}`);
-  return handleResponse(res);
-}
-
-export async function createJob(payload) {
-  const res = await fetch(BASE, {
+/** CREATE */
+export function createJob(payload) {
+  return fetch(BASE, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(payload),
-  });
-  return handleResponse(res);
+    body: JSON.stringify(payload)
+  }).then(handleResponse);
 }
 
-export async function updateJob(id, payload) {
-  const res = await fetch(`${BASE}/${id}`, {
+/** UPDATE */
+export function updateJob(id, payload) {
+  return fetch(`${BASE}/${id}`, {
     method: "PUT",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(payload),
-  });
-  return handleResponse(res);
+    body: JSON.stringify(payload)
+  }).then(handleResponse);
 }
 
-export async function deleteJob(id) {
-  const res = await fetch(`${BASE}/${id}`, { method: "DELETE" });
-  return handleResponse(res);
+/** DELETE */
+export function deleteJob(id) {
+  return fetch(`${BASE}/${id}`, { method: "DELETE" }).then(res => {
+    // for 204 No Content return true; for others use handleResponse
+    if (res.status === 204) return true;
+    return handleResponse(res);
+  });
 }

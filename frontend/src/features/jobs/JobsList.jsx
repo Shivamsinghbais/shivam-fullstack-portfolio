@@ -1,17 +1,15 @@
-// frontend/src/features/jobs/JobsList.jsx
 import React, { useEffect, useState } from "react";
 import { listJobs, deleteJob } from "./jobsService";
 
-export default function JobsList() {
-  const [pageData, setPageData] = useState(null); // holds Spring Page JSON
+export default function JobsList({  onEdit, onDelete }) {
+  const [pageData, setPageData] = useState(null);
   const [page, setPage] = useState(0);
   const [size] = useState(10);
   const [q, setQ] = useState("");
-  const [searchTerm, setSearchTerm] = useState(""); // controlled input
+  const [searchTerm, setSearchTerm] = useState("");
   const [loading, setLoading] = useState(false);
   const [err, setErr] = useState(null);
 
-  // load data whenever page, size or q changes
   useEffect(() => {
     let mounted = true;
     (async () => {
@@ -33,38 +31,24 @@ export default function JobsList() {
     return () => { mounted = false; };
   }, [page, size, q]);
 
-  // handlers
-  function onSearchSubmit(e) {
-    e.preventDefault();
-    setPage(0);        // go back to first page on new search
-    setQ(searchTerm);  // triggers effect
-  }
-
-  function onPrev() {
-    if (!pageData || page <= 0) return;
-    setPage(page - 1);
-  }
-  function onNext() {
-    if (!pageData || page >= pageData.totalPages - 1) return;
-    setPage(page + 1);
-  }
-
-  // optional: delete a job (demo)
-  async function handleDelete(id) {
+    async function handleDelete(id) {
     if (!window.confirm("Delete this job?")) return;
     try {
-      await deleteJob(id);
-      // refresh current page
-      setPage(page); // triggers reload (page state unchanged but effect still runs when q/page changed earlier)
-      // easiest: re-call by toggling q: quick trick
-      setQ((prev) => prev + ""); // no-op but ensures effect sees same q; alternatively call listJobs directly
+      await deleteJob(id);            // call backend to delete
+      if (typeof onDelete === "function") {
+        onDelete();                   // notify parent to refresh
+      } else {
+        // fallback: refetch current page if parent didn't provide handler
+        setQ(prev => prev + "");
+      }
+      // optional UX feedback
       alert("Deleted");
     } catch (e) {
       alert("Delete failed: " + (e.message || e));
     }
   }
 
-  // rendering
+
   if (loading) return <div style={{ padding: 20 }}>Loading jobs...</div>;
   if (err) return <div style={{ padding: 20, color: "crimson" }}>Error: {err}</div>;
   if (!pageData) return <div style={{ padding: 20 }}>No data yet.</div>;
@@ -75,8 +59,7 @@ export default function JobsList() {
     <div style={{ padding: 20, fontFamily: "Arial, sans-serif" }}>
       <h2>Jobs</h2>
 
-      {/* Search */}
-      <form onSubmit={onSearchSubmit} style={{ marginBottom: 12 }}>
+      <form onSubmit={(e) => { e.preventDefault(); setQ(searchTerm); setPage(0); }} style={{ marginBottom: 12 }}>
         <input
           value={searchTerm}
           onChange={(e) => setSearchTerm(e.target.value)}
@@ -86,12 +69,10 @@ export default function JobsList() {
         <button type="submit" style={{ padding: "8px 12px" }}>Search</button>
       </form>
 
-      {/* summary */}
       <div style={{ marginBottom: 12 }}>
         <strong>Total:</strong> {pageData.totalElements} — Page {pageData.number + 1} of {Math.max(1, pageData.totalPages)}
       </div>
 
-      {/* list */}
       <ul style={{ padding: 0, listStyle: "none" }}>
         {items.length === 0 && <li style={{ padding: 8 }}>No jobs found</li>}
         {items.map((j) => (
@@ -105,7 +86,7 @@ export default function JobsList() {
               <div style={{ textAlign: "right" }}>
                 <div style={{ marginBottom: 6 }}>
                   <button onClick={() => alert("Open detail later")} style={{ marginRight: 8 }}>View</button>
-                  <button onClick={() => alert("Open edit later")} style={{ marginRight: 8 }}>Edit</button>
+                  <button onClick={() => onEdit && onEdit(j)} style={{ marginRight: 8 }}>Edit</button>
                   <button onClick={() => handleDelete(j.id)} style={{ color: "crimson" }}>Delete</button>
                 </div>
                 <div style={{ fontSize: 12, color: "#999" }}>{j.postedAt ? new Date(j.postedAt).toLocaleString() : ""}</div>
@@ -115,10 +96,9 @@ export default function JobsList() {
         ))}
       </ul>
 
-      {/* pagination */}
       <div style={{ marginTop: 16, display: "flex", gap: 8, alignItems: "center" }}>
-        <button onClick={onPrev} disabled={pageData.first}>Prev</button>
-        <button onClick={onNext} disabled={pageData.last}>Next</button>
+        <button onClick={() => setPage(p => Math.max(0, p - 1))} disabled={pageData.first}>Prev</button>
+        <button onClick={() => setPage(p => Math.min(pageData.totalPages - 1, p + 1))} disabled={pageData.last}>Next</button>
         <div style={{ marginLeft: 12, color: "#666" }}>
           Showing {items.length} of {pageData.totalElements}
         </div>
@@ -126,4 +106,3 @@ export default function JobsList() {
     </div>
   );
 }
-
